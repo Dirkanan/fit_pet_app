@@ -8,7 +8,7 @@ from crud_functions import *
 import asyncio
 import aiogram
 
-api = ""
+api = "7903285534:AAELmygqVRKdDzzjqZ0Ap2Dvu7m68jZKODs"
 bot = Bot(token=api)
 dp = Dispatcher(bot, storage=MemoryStorage())
 kb = ReplyKeyboardMarkup(resize_keyboard=True)
@@ -112,7 +112,7 @@ async def send_calories(message: types.Message, state: FSMContext):
     await state.finish()
 
 class RegistrationExercise (StatesGroup):
-    name_exercise =State ()
+    name_exercise = State ()
     working_weight = State ()
     iteration = State ()
 
@@ -126,11 +126,11 @@ async def set_exer(message: types.Message, state: FSMContext):
     name_exercise = message.text
     bool_name = is_included(name_exercise)
     if bool_name is True:
-        await message.reply("Такое упражнение уже существует, хотите обновить показатели? тогда используйте "Обновление данных" ")
+        await message.reply('Такое упражнение уже существует, хотите обновить показатели? тогда используйте "Обновление данных".')
     else:
-        await state.update_data(name_exercise=state.update_data(username=username)
+        await state.update_data(name_exercise=name_exercise)
         await RegistrationExercise.working_weight.set()
-        await message.reply("укажите ваш рабочий вес:")
+        await message.reply("Укажите ваш рабочий вес:")
 
 @dp.message_handler(state=RegistrationExercise.working_weight)
 async def set_working_weight(message: types.Message, state: FSMContext):
@@ -146,7 +146,7 @@ async def set_iteration(message: types.Message, state: FSMContext):
     name_exercise = data.get('name_exercise')
     working_weight = data.get('working_weight')
     add_exercise(name_exercise, working_weight, iteration)
-    await message.reply("ну после такого подхода вас трудно не похвалить, так держать наша цель здоровье и красивое тело😉")
+    await message.reply("Ну после такого подхода вас трудно не похвалить, так держать наша цель здоровье и красивое тело😉")
     await state.finish()
 
 @dp.message_handler(commands=['start'])
