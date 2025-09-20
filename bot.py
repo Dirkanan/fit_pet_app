@@ -13,7 +13,6 @@ api = ""
 bot = Bot(token=api)
 dp = Dispatcher(storage=MemoryStorage())
 
-# Исправленное создание клавиатур
 kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='Рассчитать'), KeyboardButton(text='Информация')],
@@ -44,7 +43,6 @@ class RegistrationExercise(StatesGroup):
     working_weight = State()
     iteration = State()
 
-# Исправленные хендлеры с синтаксисом aiogram 3.x
 @dp.message(Command(commands=['start']))
 async def start_commands(message: types.Message):
     await message.answer("Привет! Я бот", reply_markup=kb)
