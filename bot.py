@@ -9,22 +9,32 @@ from aiogram import F
 from crud_functions import *
 import asyncio
 
-api = ""
+
+api = "7903285534:AAELmygqVRKdDzzjqZ0Ap2Dvu7m68jZKODs"
 bot = Bot(token=api)
 dp = Dispatcher(storage=MemoryStorage())
 
 kb = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text='Рассчитать'), KeyboardButton(text='Информация')],
+        [KeyboardButton(text='Рассчитать суточную калорийность'), KeyboardButton(text='Информация')],
         [KeyboardButton(text='Регистрация'), KeyboardButton(text='Записать результат подхода')]
     ],
     resize_keyboard=True
 )
 
+
 kb_line = InlineKeyboardMarkup(
     inline_keyboard=[
         [InlineKeyboardButton(text='Рассчитать норму калорий', callback_data='calories')],
         [InlineKeyboardButton(text='Формулы расчёта', callback_data='formulas')]
+    ]
+)
+
+formulasses = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text='Я хочу похудеть', callback_data='minus')],
+        [InlineKeyboardButton(text='Я хочу набрать', callback_data='plus')],
+        [InlineKeyboardButton(text='Хочу остаться в своем весе', callback_data='nolik')]
     ]
 )
 
@@ -37,6 +47,7 @@ class UserState(StatesGroup):
     age = State()
     growth = State()
     weight = State()
+    sex = State()
 
 class RegistrationExercise(StatesGroup):
     name_exercise = State()
@@ -45,7 +56,7 @@ class RegistrationExercise(StatesGroup):
 
 @dp.message(Command(commands=['start']))
 async def start_commands(message: types.Message):
-    await message.answer("Привет! Я бот", reply_markup=kb)
+    await message.answer("Привет! Я бот для занятия спортом. Мои функции:", reply_markup=kb)
 
 @dp.message(F.text == 'Регистрация')
 async def sing_up(message: types.Message, state: FSMContext):
@@ -72,7 +83,15 @@ async def set_email(message: types.Message, state: FSMContext):
 
 @dp.message(StateFilter(RegistrationState.age))
 async def set_age(message: types.Message, state: FSMContext):
-    age = message.text
+    try:
+        age = int(message.text)
+        if age < 0 or age > 150:
+            await message.reply("Пожалуйста, введите корректный возраст (0-150):")
+            return
+    except ValueError:
+        await message.reply("Пожалуйста, введите число:")
+        return
+
     data = await state.get_data()
     username = data.get('username')
     email = data.get('email')
@@ -80,42 +99,118 @@ async def set_age(message: types.Message, state: FSMContext):
     await message.reply("Вы успешно зарегистрированы!")
     await state.clear()
 
-@dp.message(F.text == 'Рассчитать')
+@dp.message(F.text == 'Рассчитать суточную калорийность')
 async def main_menu(message: types.Message):
     await message.answer("Выберите опцию:", reply_markup=kb_line)
 
-@dp.callback_query(F.text == 'formulas')
+@dp.callback_query(F.data == 'formulas')
 async def get_formulas(call: types.CallbackQuery):
     await call.message.answer("10 х вес (кг) + 6,25 x рост (см) – 5 х возраст (г) + 5")
     await call.answer()
 
-@dp.callback_query(F.text == 'calories')
-async def set_age(call: types.CallbackQuery, state: FSMContext):
+
+@dp.callback_query(F.data == 'calories')
+async def calories_callback(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer('Введите свой возраст:')
     await call.answer()
     await state.set_state(UserState.age)
 
+
 @dp.message(StateFilter(UserState.age))
-async def set_growth(message: types.Message, state: FSMContext):
-    await state.update_data(age=int(message.text))
+async def set_age_for_calories(message: types.Message, state: FSMContext):
+    try:
+        age = int(message.text)
+        if age < 0 or age > 150:
+            await message.reply("Пожалуйста, введите корректный возраст (0-150):")
+            return
+    except ValueError:
+        await message.reply("Пожалуйста, введите число:")
+        return
+
+    await state.update_data(age=age)
+    await message.answer('Укажите свой пол: мужчина - 1, женщина - 2')
+    await state.set_state(UserState.sex)
+
+
+@dp.message(StateFilter(UserState.sex))
+async def set_sex(message: types.Message, state: FSMContext):
+    try:
+        sex_input = int(message.text)
+        if sex_input not in [1, 2]:
+            await message.reply("Пожалуйста, укажите свой пол: мужчина - 1, женщина - 2")
+            return
+    except ValueError:
+        await message.reply("Пожалуйста, введите 1 или 2:")
+        return
+
+    sex_value = 5 if sex_input == 1 else -161
+    await state.update_data(sex=sex_value)
     await message.answer('Введите свой рост в сантиметрах:')
     await state.set_state(UserState.growth)
 
+
 @dp.message(StateFilter(UserState.growth))
-async def set_weight(message: types.Message, state: FSMContext):
-    await state.update_data(growth=int(message.text))
+async def set_growth(message: types.Message, state: FSMContext):
+    try:
+        growth = int(message.text)
+        if growth < 50 or growth > 250:
+            await message.reply("Пожалуйста, введите корректный рост (50-250 см):")
+            return
+    except ValueError:
+        await message.reply("Пожалуйста, введите число:")
+        return
+
+    await state.update_data(growth=growth)
     await message.answer('Введите свой вес в кг:')
     await state.set_state(UserState.weight)
 
+
 @dp.message(StateFilter(UserState.weight))
-async def send_calories(message: types.Message, state: FSMContext):
-    await state.update_data(weight=int(message.text))
+async def set_weight(message: types.Message, state: FSMContext):
+    try:
+        weight = float(message.text)
+        if weight < 20 or weight > 300:
+            await message.reply("Пожалуйста, введите корректный вес (20-300 кг):")
+            return
+    except ValueError:
+        await message.reply("Пожалуйста, введите число:")
+        return
+
+    await state.update_data(weight=weight)
     data = await state.get_data()
     age = data.get('age')
+    sex = data.get('sex')
     growth = data.get('growth')
     weight = data.get('weight')
-    bmr = 10 * weight + 6.25 * growth - 5 * age + 5
-    await message.answer(f'Ваша норма калорий: {bmr} ккал в день.')
+
+    if all(param is not None for param in [age, sex, growth, weight]):
+        bmr = 10 * weight + 6.25 * growth - 5 * age + sex
+        Plus = bmr * 1.20
+        Minus = bmr * 0.85
+        await message.answer(f'Ваша норма калорий: {bmr:.0f} ккал в день.')
+        await message.answer("Выберите опцию:", reply_markup=formulasses)
+    else:
+        await message.answer('Произошла ошибка в данных. Попробуйте заново.')
+
+    await state.clear()
+
+    @dp.callback_query(F.data == 'minus')
+    async def handle_minus(call: types.CallbackQuery):
+        await call.message.answer(f"Вы выбрали похудение. Рекомендуем уменьшить калорийность на 15-20%. В твоем случае это {Minus:0f}")
+        await call.answer()
+
+    @dp.callback_query(F.data == 'plus')
+    async def handle_plus(call: types.CallbackQuery):
+        await call.message.answer(f"Вы выбрали набор массы. Рекомендуем увеличить калорийность на 10-20%. В твоем случае это {Plus:0f}")
+        await call.answer()
+
+    @dp.callback_query(F.data == 'nolik')
+    async def handle_nolik(call: types.CallbackQuery):
+        await call.message.answer(
+            "Вы выбрали поддержание веса. Рекомендуем придерживаться рассчитанной нормы калорий.")
+        await call.answer()
+
+
     await state.clear()
 
 @dp.message(F.text == 'Записать результат подхода')
@@ -136,24 +231,43 @@ async def set_exer(message: types.Message, state: FSMContext):
 
 @dp.message(StateFilter(RegistrationExercise.working_weight))
 async def set_working_weight(message: types.Message, state: FSMContext):
-    working_weight = message.text
+    try:
+        working_weight = float(message.text)
+        if working_weight < 0 or working_weight > 1000:
+            await message.reply("Пожалуйста, введите корректный вес (0-1000 кг):")
+            return
+    except ValueError:
+        await message.reply("Пожалуйста, введите число:")
+        return
+
     await state.update_data(working_weight=working_weight)
     await state.set_state(RegistrationExercise.iteration)
     await message.reply("Укажите количество повторений")
 
 @dp.message(StateFilter(RegistrationExercise.iteration))
 async def set_iteration(message: types.Message, state: FSMContext):
-    iteration = message.text
+    try:
+        iteration = int(message.text)
+        if iteration < 0 or iteration > 1000:
+            await message.reply("Пожалуйста, введите корректное количество повторений (0-1000):")
+            return
+    except ValueError:
+        await message.reply("Пожалуйста, введите число:")
+        return
+
     data = await state.get_data()
     name_exercise = data.get('name_exercise')
     working_weight = data.get('working_weight')
     add_exercise(name_exercise, working_weight, iteration)
+
     await message.reply("Ну после такого подхода вас трудно не похвалить, так держать наша цель здоровье и красивое тело😉")
     await state.clear()
 
 @dp.message(F.text == 'Информация')
 async def information(message: types.Message):
     await message.answer('Кнопка еще не готова')
+
+
 
 @dp.message()
 async def all_message(message: types.Message):
