@@ -10,7 +10,7 @@ from crud_functions import *
 import asyncio
 
 
-api = "7903285534:AAELmygqVRKdDzzjqZ0Ap2Dvu7m68jZKODs"
+api = ""
 bot = Bot(token=api)
 dp = Dispatcher(storage=MemoryStorage())
 
@@ -38,6 +38,17 @@ formulasses = InlineKeyboardMarkup(
     ]
 )
 
+activity_keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text='Сидячий образ жизни (1.2)', callback_data='1.2')],
+        [InlineKeyboardButton(text='Легкая активность (1.375)', callback_data='1.375')],
+        [InlineKeyboardButton(text='Умеренная активность (1.55)', callback_data='1.55')],
+        [InlineKeyboardButton(text='Активный образ жизни (1.725)', callback_data='1.725')],
+        [InlineKeyboardButton(text='Очень активный (1.9)', callback_data='1.9')]
+    ]
+)
+
+
 class RegistrationState(StatesGroup):
     username = State()
     email = State()
@@ -48,6 +59,7 @@ class UserState(StatesGroup):
     growth = State()
     weight = State()
     sex = State()
+    activity = State()
 
 class RegistrationExercise(StatesGroup):
     name_exercise = State()
@@ -177,41 +189,64 @@ async def set_weight(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(weight=weight)
+    await message.answer('Выберите ваш уровень физической активности:', reply_markup=activity_keyboard)
+    await state.set_state(UserState.activity)
+
+@dp.callback_query(StateFilter(UserState.activity))
+async def set_activity(call: types.CallbackQuery, state: FSMContext):
+    activity_coefficient = float(call.data)
+    await state.update_data(activity=activity_coefficient)
+    await call.answer()
+
+    # Получаем все данные и производим расчет
     data = await state.get_data()
     age = data.get('age')
     sex = data.get('sex')
+    activity = data.get('activity')  # Исправлено: правильно получаем значение
     growth = data.get('growth')
     weight = data.get('weight')
 
-    if all(param is not None for param in [age, sex, growth, weight]):
+    if all(param is not None for param in [age, sex, growth, weight, activity]):
         bmr = 10 * weight + 6.25 * growth - 5 * age + sex
-        Plus = bmr * 1.20
-        Minus = bmr * 0.85
-        await message.answer(f'Ваша норма калорий: {bmr:.0f} ккал в день.')
-        await message.answer("Выберите опцию:", reply_markup=formulasses)
+        total_calories = bmr * activity
+        Plus = total_calories * 1.20
+        Minus = total_calories * 0.85
+        await call.message.answer(f'Ваша норма калорий: {total_calories:.0f} ккал в день.')
+        await call.message.answer("Выберите опцию:", reply_markup=formulasses)
+
+        await state.update_data(
+            total_calories=total_calories,
+            plus_calories=Plus,
+            minus_calories=Minus
+        )
     else:
-        await message.answer('Произошла ошибка в данных. Попробуйте заново.')
+        await call.message.answer('Произошла ошибка в данных. Попробуйте заново.')
 
-    await state.clear()
+    await state.set_state(None) 
 
-    @dp.callback_query(F.data == 'minus')
-    async def handle_minus(call: types.CallbackQuery):
-        await call.message.answer(f"Вы выбрали похудение. Рекомендуем уменьшить калорийность на 15-20%. В твоем случае это {Minus:0f}")
-        await call.answer()
-
-    @dp.callback_query(F.data == 'plus')
-    async def handle_plus(call: types.CallbackQuery):
-        await call.message.answer(f"Вы выбрали набор массы. Рекомендуем увеличить калорийность на 10-20%. В твоем случае это {Plus:0f}")
-        await call.answer()
-
-    @dp.callback_query(F.data == 'nolik')
-    async def handle_nolik(call: types.CallbackQuery):
-        await call.message.answer(
-            "Вы выбрали поддержание веса. Рекомендуем придерживаться рассчитанной нормы калорий.")
-        await call.answer()
+@dp.callback_query(F.data == 'minus')
+async def handle_minus(call: types.CallbackQuery, state: FSMContext): 
+    data = await state.get_data()
+    minus_calories = data.get('minus_calories', 0)
+    await call.message.answer(
+        f"Вы выбрали похудение. Рекомендуем уменьшить калорийность на 15-20%. В вашем случае это {minus_calories:.0f}")
+    await call.answer()
 
 
-    await state.clear()
+@dp.callback_query(F.data == 'plus')
+async def handle_plus(call: types.CallbackQuery, state: FSMContext): 
+    data = await state.get_data()
+    plus_calories = data.get('plus_calories', 0)
+    await call.message.answer(
+        f"Вы выбрали набор массы. Рекомендуем увеличить калорийность на 10-20%. В вашем случае это {plus_calories:.0f}")
+    await call.answer()
+
+
+@dp.callback_query(F.data == 'nolik')
+async def handle_nolik(call: types.CallbackQuery):
+    await call.message.answer("Вы выбрали поддержание веса. Рекомендуем придерживаться рассчитанной нормы калорий.")
+    await call.answer()
+
 
 @dp.message(F.text == 'Записать результат подхода')
 async def exercise(message: types.Message, state: FSMContext):
