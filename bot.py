@@ -1,79 +1,38 @@
 from aiogram import Bot, Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.filters import Command, StateFilter
 from aiogram import F
+from keyboards.reply_keyboards import kb
+from keyboards.inline_keyboards import kb_line, formulasses, activity_keyboard
+from states.user_states import RegistrationState, UserState, RegistrationExercise
 from crud_functions import *
 import asyncio
+from config import BOT_TOKEN
+from utils.messages import MESSAGES
 
 
-api = ""
-bot = Bot(token=api)
+if not BOT_TOKEN:
+    raise ValueError("BOT_TOKEN не установлен. Проверьте файл .env")
+
+bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-kb = ReplyKeyboardMarkup(
-    keyboard=[
-        [KeyboardButton(text='Рассчитать суточную калорийность'), KeyboardButton(text='Информация')],
-        [KeyboardButton(text='Регистрация'), KeyboardButton(text='Записать результат подхода')]
-    ],
-    resize_keyboard=True
-)
-
-
-kb_line = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text='Рассчитать норму калорий', callback_data='calories')],
-        [InlineKeyboardButton(text='Формулы расчёта', callback_data='formulas')]
-    ]
-)
-
-formulasses = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text='Я хочу похудеть', callback_data='minus')],
-        [InlineKeyboardButton(text='Я хочу набрать', callback_data='plus')],
-        [InlineKeyboardButton(text='Хочу остаться в своем весе', callback_data='nolik')]
-    ]
-)
-
-activity_keyboard = InlineKeyboardMarkup(
-    inline_keyboard=[
-        [InlineKeyboardButton(text='Сидячий образ жизни (1.2)', callback_data='1.2')],
-        [InlineKeyboardButton(text='Легкая активность (1.375)', callback_data='1.375')],
-        [InlineKeyboardButton(text='Умеренная активность (1.55)', callback_data='1.55')],
-        [InlineKeyboardButton(text='Активный образ жизни (1.725)', callback_data='1.725')],
-        [InlineKeyboardButton(text='Очень активный (1.9)', callback_data='1.9')]
-    ]
-)
-
-
-class RegistrationState(StatesGroup):
-    username = State()
-    email = State()
-    age = State()
-
-class UserState(StatesGroup):
-    age = State()
-    growth = State()
-    weight = State()
-    sex = State()
-    activity = State()
-
-class RegistrationExercise(StatesGroup):
-    name_exercise = State()
-    working_weight = State()
-    iteration = State()
 
 @dp.message(Command(commands=['start']))
 async def start_commands(message: types.Message):
-    await message.answer("Привет! Я бот для занятия спортом. Мои функции:", reply_markup=kb)
+    await message.answer(MESSAGES["start"], reply_markup=kb, parse_mode="HTML")
 
-@dp.message(F.text == 'Регистрация')
+@dp.message(F.text == '👤 Регистрация')
 async def sing_up(message: types.Message, state: FSMContext):
-    await message.answer("Введите имя пользователя (только латинский алфавит):")
+    await message.answer(MESSAGES["registration_start"], reply_markup=kb_back)
     await state.set_state(RegistrationState.username)
+
+@dp.callback_query(F.data == 'calories')
+async def calories_callback(call: types.CallbackQuery, state: FSMContext):
+    await call.message.answer(MESSAGES["calorie_calc_start"], reply_markup=kb_back)
+    await call.answer()
+    await state.set_state(UserState.age)
 
 @dp.message(StateFilter(RegistrationState.username))
 async def set_username(message: types.Message, state: FSMContext):
@@ -120,12 +79,6 @@ async def get_formulas(call: types.CallbackQuery):
     await call.message.answer("10 х вес (кг) + 6,25 x рост (см) – 5 х возраст (г) + 5")
     await call.answer()
 
-
-@dp.callback_query(F.data == 'calories')
-async def calories_callback(call: types.CallbackQuery, state: FSMContext):
-    await call.message.answer('Введите свой возраст:')
-    await call.answer()
-    await state.set_state(UserState.age)
 
 
 @dp.message(StateFilter(UserState.age))
@@ -214,6 +167,7 @@ async def set_activity(call: types.CallbackQuery, state: FSMContext):
         await call.message.answer(f'Ваша норма калорий: {total_calories:.0f} ккал в день.')
         await call.message.answer("Выберите опцию:", reply_markup=formulasses)
 
+        # Сохраняем значения для последующего использования
         await state.update_data(
             total_calories=total_calories,
             plus_calories=Plus,
@@ -222,10 +176,12 @@ async def set_activity(call: types.CallbackQuery, state: FSMContext):
     else:
         await call.message.answer('Произошла ошибка в данных. Попробуйте заново.')
 
-    await state.set_state(None) 
+    await state.set_state(None)  # Очищаем состояние
 
+
+# Исправляем обработчики callback-запросов для формул
 @dp.callback_query(F.data == 'minus')
-async def handle_minus(call: types.CallbackQuery, state: FSMContext): 
+async def handle_minus(call: types.CallbackQuery, state: FSMContext):  # Добавлен state как параметр
     data = await state.get_data()
     minus_calories = data.get('minus_calories', 0)
     await call.message.answer(
@@ -234,7 +190,7 @@ async def handle_minus(call: types.CallbackQuery, state: FSMContext):
 
 
 @dp.callback_query(F.data == 'plus')
-async def handle_plus(call: types.CallbackQuery, state: FSMContext): 
+async def handle_plus(call: types.CallbackQuery, state: FSMContext):  # Добавлен state как параметр
     data = await state.get_data()
     plus_calories = data.get('plus_calories', 0)
     await call.message.answer(
