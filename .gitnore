@@ -1,0 +1,38 @@
+# Байт-код Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Виртуальное окружение
+.venv/
+venv/
+env/
+ENV/
+
+# Конфигурационные файлы
+.env
+.env.local
+.env.*.local
+
+# Временные файлы
+*.log
+*.tmp
+*.temp
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ОС
+.DS_Store
+Thumbs.db
+
+# Токены и конфиденциальные данные
+*.token
+*.key
+secrets.json

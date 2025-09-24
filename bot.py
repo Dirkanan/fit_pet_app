@@ -3,7 +3,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command, StateFilter
 from aiogram import F
-from keyboards.reply_keyboards import kb
+from keyboards.reply_keyboards import *
 from keyboards.inline_keyboards import kb_line, formulasses, activity_keyboard
 from states.user_states import RegistrationState, UserState, RegistrationExercise
 from crud_functions import *
@@ -25,58 +25,59 @@ async def start_commands(message: types.Message):
 
 @dp.message(F.text == '👤 Регистрация')
 async def sing_up(message: types.Message, state: FSMContext):
-    await message.answer(MESSAGES["registration_start"], reply_markup=kb_back)
+    await message.answer(MESSAGES["registration_start"], parse_mode="HTML")
     await state.set_state(RegistrationState.username)
-
-@dp.callback_query(F.data == 'calories')
-async def calories_callback(call: types.CallbackQuery, state: FSMContext):
-    await call.message.answer(MESSAGES["calorie_calc_start"], reply_markup=kb_back)
-    await call.answer()
-    await state.set_state(UserState.age)
 
 @dp.message(StateFilter(RegistrationState.username))
 async def set_username(message: types.Message, state: FSMContext):
     username = message.text
     bool_name = is_included(username)
     if bool_name is True:
-        await message.reply("Пользователь существует, введите другое имя:")
+        await message.reply(MESSAGES["user_exists"], parse_mode="HTML")
     else:
         await state.update_data(username=username)
         await state.set_state(RegistrationState.email)
-        await message.reply("Введите свой email:")
+        await message.reply(MESSAGES["enter_email"], parse_mode="HTML")
 
 @dp.message(StateFilter(RegistrationState.email))
 async def set_email(message: types.Message, state: FSMContext):
     email = message.text
     await state.update_data(email=email)
     await state.set_state(RegistrationState.age)
-    await message.reply("Введите свой возраст:")
+    await message.reply(MESSAGES["enter_age"], parse_mode="HTML")
 
 @dp.message(StateFilter(RegistrationState.age))
 async def set_age(message: types.Message, state: FSMContext):
     try:
         age = int(message.text)
         if age < 0 or age > 150:
-            await message.reply("Пожалуйста, введите корректный возраст (0-150):")
+            await message.reply(MESSAGES["age_fail"], parse_mode="HTML")
             return
     except ValueError:
-        await message.reply("Пожалуйста, введите число:")
+        await message.reply(MESSAGES["invalid_number"], parse_mode="HTML")
         return
 
     data = await state.get_data()
     username = data.get('username')
     email = data.get('email')
     add_user(username, email, age)
-    await message.reply("Вы успешно зарегистрированы!")
+    await message.reply(MESSAGES["registration_success"], parse_mode="HTML")
     await state.clear()
 
-@dp.message(F.text == 'Рассчитать суточную калорийность')
+@dp.callback_query(F.data == 'calories')
+async def calories_callback(call: types.CallbackQuery, state: FSMContext):
+    await call.message.answer(MESSAGES["calorie_calc_start"], parse_mode="HTML")
+    await call.answer()
+    await state.set_state(UserState.age)
+
+
+@dp.message(F.text == '🧮 Калорийность')
 async def main_menu(message: types.Message):
-    await message.answer("Выберите опцию:", reply_markup=kb_line)
+    await message.answer("Выберите опцию:", reply_markup=kb_line, parse_mode="HTML")
 
 @dp.callback_query(F.data == 'formulas')
 async def get_formulas(call: types.CallbackQuery):
-    await call.message.answer("10 х вес (кг) + 6,25 x рост (см) – 5 х возраст (г) + 5")
+    await call.message.answer(MESSAGES["formulas"], parse_mode="HTML")
     await call.answer()
 
 
@@ -86,14 +87,14 @@ async def set_age_for_calories(message: types.Message, state: FSMContext):
     try:
         age = int(message.text)
         if age < 0 or age > 150:
-            await message.reply("Пожалуйста, введите корректный возраст (0-150):")
+            await message.reply(MESSAGES["age_fail"], parse_mode="HTML")
             return
     except ValueError:
-        await message.reply("Пожалуйста, введите число:")
+        await message.reply(MESSAGES["invalid_number"], parse_mode="HTML")
         return
 
     await state.update_data(age=age)
-    await message.answer('Укажите свой пол: мужчина - 1, женщина - 2')
+    await message.answer(MESSAGES['enter_gender'], parse_mode="HTML")
     await state.set_state(UserState.sex)
 
 
@@ -102,7 +103,7 @@ async def set_sex(message: types.Message, state: FSMContext):
     try:
         sex_input = int(message.text)
         if sex_input not in [1, 2]:
-            await message.reply("Пожалуйста, укажите свой пол: мужчина - 1, женщина - 2")
+            await message.reply(MESSAGES['enter_gender'], parse_mode="HTML")
             return
     except ValueError:
         await message.reply("Пожалуйста, введите 1 или 2:")
@@ -110,7 +111,7 @@ async def set_sex(message: types.Message, state: FSMContext):
 
     sex_value = 5 if sex_input == 1 else -161
     await state.update_data(sex=sex_value)
-    await message.answer('Введите свой рост в сантиметрах:')
+    await message.answer(MESSAGES['enter_height'], parse_mode="HTML")
     await state.set_state(UserState.growth)
 
 
@@ -126,7 +127,7 @@ async def set_growth(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(growth=growth)
-    await message.answer('Введите свой вес в кг:')
+    await message.answer(MESSAGES['enter_weight'], parse_mode="HTML")
     await state.set_state(UserState.weight)
 
 
@@ -142,7 +143,7 @@ async def set_weight(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(weight=weight)
-    await message.answer('Выберите ваш уровень физической активности:', reply_markup=activity_keyboard)
+    await message.answer(MESSAGES['choose_activity'], reply_markup=activity_keyboard, parse_mode="HTML")
     await state.set_state(UserState.activity)
 
 @dp.callback_query(StateFilter(UserState.activity))
@@ -164,14 +165,23 @@ async def set_activity(call: types.CallbackQuery, state: FSMContext):
         total_calories = bmr * activity
         Plus = total_calories * 1.20
         Minus = total_calories * 0.85
-        await call.message.answer(f'Ваша норма калорий: {total_calories:.0f} ккал в день.')
+
+        await call.message.answer(f'''✅ <b>Расчет завершен!</b>
+    
+📊 <b>Ваши данные:</b>
+• Возраст: {age} лет
+• Пол: {sex}
+• Рост: {growth} см
+• Вес: {weight} кг
+• Коэффициент активности: {activity}
+🔥 <b>Ваша суточная норма калорий: {total_calories} ккал</b>''', parse_mode="HTML")
         await call.message.answer("Выберите опцию:", reply_markup=formulasses)
 
         # Сохраняем значения для последующего использования
         await state.update_data(
-            total_calories=total_calories,
-            plus_calories=Plus,
-            minus_calories=Minus
+            total_calories = total_calories,
+            plus_calories = Plus,
+            minus_calories = Minus
         )
     else:
         await call.message.answer('Произошла ошибка в данных. Попробуйте заново.')
