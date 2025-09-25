@@ -10,6 +10,9 @@ from crud_functions import *
 import asyncio
 from config import BOT_TOKEN
 from utils.messages import MESSAGES
+from utils.bad_words import forbidden_words
+from better_profanity import profanity
+import re
 
 
 if not BOT_TOKEN:
@@ -18,6 +21,56 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
+def is_russian_profanity(text: str) -> bool:
+    text_lower = text.lower()
+    for word in forbidden_words:
+        if word in text_lower:
+            return True
+    return False
+
+def is_valid_username(username: str) -> tuple[bool, str]:
+    # Проверка длины
+    if len(username) < 2 or len(username) > 30:
+        return False, "Имя должно быть от 2 до 30 символов."
+
+    # Проверка первого символа (не цифра)
+    if username[0].isdigit():
+        return False, "Имя не может начинаться с цифры."
+
+    # Проверка на допустимые символы
+    if not re.match(r'^[a-zA-Zа-яА-ЯёЁ0-9_-]+$', username):
+        return False, "Имя содержит недопустимые символы."
+
+    # Проверка на мат через better-profanity (английский)
+    if profanity.contains_profanity(username):
+        return False, "Имя содержит запрещённые слова."
+
+    # Проверка на русский мат через кастомный список
+    if is_russian_profanity(username):
+        return False, "Имя содержит запрещённые слова."
+
+    return True, ""
+
+def is_valid_email(email: str) -> tuple[bool, str]:
+    """
+    Проверяет корректность email:
+    - Соответствие формату email
+    - Не содержит запрещенных слов
+    """
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return False, "Некорректный формат email. Пример: user@example.com"
+    
+    email_lower = email.lower()
+    for forbidden_word in forbidden_words:
+        if forbidden_word in email_lower:
+            return False, "Email содержит запрещённые слова."
+    
+    # Проверка на мат через better-profanity (английский)
+    if profanity.contains_profanity(email):
+        return False, "Email содержит запрещённые слова."
+    
+    return True, ""
 
 @dp.message(Command(commands=['start']))
 async def start_commands(message: types.Message):
@@ -31,20 +84,33 @@ async def sing_up(message: types.Message, state: FSMContext):
 @dp.message(StateFilter(RegistrationState.username))
 async def set_username(message: types.Message, state: FSMContext):
     username = message.text
+
+    is_valid, error_msg = is_valid_username(username)
+    if not is_valid:
+        await message.reply(error_msg, parse_mode="HTML")
+        return
+
     bool_name = is_included(username)
-    if bool_name is True:
+    if bool_name:
         await message.reply(MESSAGES["user_exists"], parse_mode="HTML")
-    else:
-        await state.update_data(username=username)
-        await state.set_state(RegistrationState.email)
-        await message.reply(MESSAGES["enter_email"], parse_mode="HTML")
+        return
+
+    await state.update_data(username=username)
+    await state.set_state(RegistrationState.email)
+    await message.reply(MESSAGES["enter_email"], parse_mode="HTML")
+
 
 @dp.message(StateFilter(RegistrationState.email))
 async def set_email(message: types.Message, state: FSMContext):
     email = message.text
+    is_valid, error_msg = is_valid_email(email)
+    if not is_valid:
+        await message.reply(error_msg, parse_mode="HTML")
+        return
     await state.update_data(email=email)
     await state.set_state(RegistrationState.age)
     await message.reply(MESSAGES["enter_age"], parse_mode="HTML")
+
 
 @dp.message(StateFilter(RegistrationState.age))
 async def set_age(message: types.Message, state: FSMContext):
@@ -64,6 +130,7 @@ async def set_age(message: types.Message, state: FSMContext):
     await message.reply(MESSAGES["registration_success"], parse_mode="HTML")
     await state.clear()
 
+
 @dp.callback_query(F.data == 'calories')
 async def calories_callback(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer(MESSAGES["calorie_calc_start"], parse_mode="HTML")
@@ -75,11 +142,11 @@ async def calories_callback(call: types.CallbackQuery, state: FSMContext):
 async def main_menu(message: types.Message):
     await message.answer("Выберите опцию:", reply_markup=kb_line, parse_mode="HTML")
 
+
 @dp.callback_query(F.data == 'formulas')
 async def get_formulas(call: types.CallbackQuery):
     await call.message.answer(MESSAGES["formulas"], parse_mode="HTML")
     await call.answer()
-
 
 
 @dp.message(StateFilter(UserState.age))
@@ -146,6 +213,7 @@ async def set_weight(message: types.Message, state: FSMContext):
     await message.answer(MESSAGES['choose_activity'], reply_markup=activity_keyboard, parse_mode="HTML")
     await state.set_state(UserState.activity)
 
+
 @dp.callback_query(StateFilter(UserState.activity))
 async def set_activity(call: types.CallbackQuery, state: FSMContext):
     activity_coefficient = float(call.data)
@@ -156,7 +224,7 @@ async def set_activity(call: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     age = data.get('age')
     sex = data.get('sex')
-    activity = data.get('activity')  # Исправлено: правильно получаем значение
+    activity = data.get('activity')
     growth = data.get('growth')
     weight = data.get('weight')
 
@@ -167,31 +235,29 @@ async def set_activity(call: types.CallbackQuery, state: FSMContext):
         Minus = total_calories * 0.85
 
         await call.message.answer(f'''✅ <b>Расчет завершен!</b>
-    
+
 📊 <b>Ваши данные:</b>
 • Возраст: {age} лет
-• Пол: {sex}
+• Пол: {'Мужской' if sex == 5 else 'Женский'}
 • Рост: {growth} см
 • Вес: {weight} кг
 • Коэффициент активности: {activity}
-🔥 <b>Ваша суточная норма калорий: {total_calories} ккал</b>''', parse_mode="HTML")
+🔥 <b>Ваша суточная норма калорий: {total_calories:.0f} ккал</b>''', parse_mode="HTML")
         await call.message.answer("Выберите опцию:", reply_markup=formulasses)
 
-        # Сохраняем значения для последующего использования
         await state.update_data(
-            total_calories = total_calories,
-            plus_calories = Plus,
-            minus_calories = Minus
+            total_calories=total_calories,
+            plus_calories=Plus,
+            minus_calories=Minus
         )
     else:
         await call.message.answer('Произошла ошибка в данных. Попробуйте заново.')
 
-    await state.set_state(None)  # Очищаем состояние
+    await state.set_state(None)
 
 
-# Исправляем обработчики callback-запросов для формул
 @dp.callback_query(F.data == 'minus')
-async def handle_minus(call: types.CallbackQuery, state: FSMContext):  # Добавлен state как параметр
+async def handle_minus(call: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     minus_calories = data.get('minus_calories', 0)
     await call.message.answer(
@@ -200,7 +266,7 @@ async def handle_minus(call: types.CallbackQuery, state: FSMContext):  # Доб�
 
 
 @dp.callback_query(F.data == 'plus')
-async def handle_plus(call: types.CallbackQuery, state: FSMContext):  # Добавлен state как параметр
+async def handle_plus(call: types.CallbackQuery, state: FSMContext):
     data = await state.get_data()
     plus_calories = data.get('plus_calories', 0)
     await call.message.answer(
@@ -219,16 +285,19 @@ async def exercise(message: types.Message, state: FSMContext):
     await message.answer("Введите название упражнения")
     await state.set_state(RegistrationExercise.name_exercise)
 
+
 @dp.message(StateFilter(RegistrationExercise.name_exercise))
 async def set_exer(message: types.Message, state: FSMContext):
     name_exercise = message.text
     bool_name = is_included(name_exercise)
-    if bool_name is True:
-        await message.reply('Такое упражнение уже существует, хотите обновить показатели? тогда используйте "Обновление данных".')
+    if bool_name:
+        await message.reply(
+            'Такое упражнение уже существует, хотите обновить показатели? тогда используйте "Обновление данных".')
     else:
         await state.update_data(name_exercise=name_exercise)
         await state.set_state(RegistrationExercise.working_weight)
         await message.reply("Укажите ваш рабочий вес:")
+
 
 @dp.message(StateFilter(RegistrationExercise.working_weight))
 async def set_working_weight(message: types.Message, state: FSMContext):
@@ -244,6 +313,7 @@ async def set_working_weight(message: types.Message, state: FSMContext):
     await state.update_data(working_weight=working_weight)
     await state.set_state(RegistrationExercise.iteration)
     await message.reply("Укажите количество повторений")
+
 
 @dp.message(StateFilter(RegistrationExercise.iteration))
 async def set_iteration(message: types.Message, state: FSMContext):
@@ -261,21 +331,24 @@ async def set_iteration(message: types.Message, state: FSMContext):
     working_weight = data.get('working_weight')
     add_exercise(name_exercise, working_weight, iteration)
 
-    await message.reply("Ну после такого подхода вас трудно не похвалить, так держать наша цель здоровье и красивое тело😉")
+    await message.reply(
+        "Ну после такого подхода вас трудно не похвалить, так держать наша цель здоровье и красивое тело😉")
     await state.clear()
+
 
 @dp.message(F.text == 'Информация')
 async def information(message: types.Message):
     await message.answer('Кнопка еще не готова')
 
 
-
 @dp.message()
 async def all_message(message: types.Message):
     await message.answer('Введите команду /start, чтобы начать общение.')
 
+
 async def main():
     await dp.start_polling(bot)
+
 
 if __name__ == '__main__':
     asyncio.run(main())
