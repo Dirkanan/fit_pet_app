@@ -1,10 +1,12 @@
+#bot.py
 from aiogram import Bot, Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import Command, StateFilter
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram import F
 from keyboards.reply_keyboards import *
-from keyboards.inline_keyboards import kb_line, formulasses, activity_keyboard
+from keyboards.inline_keyboards import kb_line, formulasses, activity_keyboard, profile_keyboard
 from states.user_states import RegistrationState, UserState, RegistrationExercise
 from crud_functions import *
 import asyncio
@@ -21,65 +23,19 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
-def is_russian_profanity(text: str) -> bool:
-    text_lower = text.lower()
-    for word in forbidden_words:
-        if word in text_lower:
-            return True
-    return False
+user_last_data = {}
 
-def is_valid_username(username: str) -> tuple[bool, str]:
-    # Проверка длины
-    if len(username) < 2 or len(username) > 30:
-        return False, "Имя должно быть от 2 до 30 символов."
-
-    # Проверка первого символа (не цифра)
-    if username[0].isdigit():
-        return False, "Имя не может начинаться с цифры."
-
-    # Проверка на допустимые символы
-    if not re.match(r'^[a-zA-Zа-яА-ЯёЁ0-9_-]+$', username):
-        return False, "Имя содержит недопустимые символы."
-
-    # Проверка на мат через better-profanity (английский)
-    if profanity.contains_profanity(username):
-        return False, "Имя содержит запрещённые слова."
-
-    # Проверка на русский мат через кастомный список
-    if is_russian_profanity(username):
-        return False, "Имя содержит запрещённые слова."
-
-    return True, ""
-
-def is_valid_email(email: str) -> tuple[bool, str]:
-    """
-    Проверяет корректность email:
-    - Соответствие формату email
-    - Не содержит запрещенных слов
-    """
-    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    if not re.match(email_pattern, email):
-        return False, "Некорректный формат email. Пример: user@example.com"
-    
-    email_lower = email.lower()
-    for forbidden_word in forbidden_words:
-        if forbidden_word in email_lower:
-            return False, "Email содержит запрещённые слова."
-    
-    # Проверка на мат через better-profanity (английский)
-    if profanity.contains_profanity(email):
-        return False, "Email содержит запрещённые слова."
-    
-    return True, ""
 
 @dp.message(Command(commands=['start']))
 async def start_commands(message: types.Message):
     await message.answer(MESSAGES["start"], reply_markup=kb, parse_mode="HTML")
 
+
 @dp.message(F.text == '👤 Регистрация')
 async def sing_up(message: types.Message, state: FSMContext):
     await message.answer(MESSAGES["registration_start"], parse_mode="HTML")
     await state.set_state(RegistrationState.username)
+
 
 @dp.message(StateFilter(RegistrationState.username))
 async def set_username(message: types.Message, state: FSMContext):
@@ -131,16 +87,16 @@ async def set_age(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+@dp.message(F.text == '🧮 Калорийность')
+async def main_menu(message: types.Message):
+    await message.answer("Выберите опцию:", reply_markup=kb_line, parse_mode="HTML")
+
+
 @dp.callback_query(F.data == 'calories')
 async def calories_callback(call: types.CallbackQuery, state: FSMContext):
     await call.message.answer(MESSAGES["calorie_calc_start"], parse_mode="HTML")
     await call.answer()
     await state.set_state(UserState.age)
-
-
-@dp.message(F.text == '🧮 Калорийность')
-async def main_menu(message: types.Message):
-    await message.answer("Выберите опцию:", reply_markup=kb_line, parse_mode="HTML")
 
 
 @dp.callback_query(F.data == 'formulas')
@@ -161,6 +117,13 @@ async def set_age_for_calories(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(age=age)
+
+    # Сохраняем возраст в последних данных пользователя
+    user_id = message.from_user.id
+    if user_id not in user_last_data:
+        user_last_data[user_id] = {}
+    user_last_data[user_id]['age'] = age
+
     await message.answer(MESSAGES['enter_gender'], parse_mode="HTML")
     await state.set_state(UserState.sex)
 
@@ -178,6 +141,11 @@ async def set_sex(message: types.Message, state: FSMContext):
 
     sex_value = 5 if sex_input == 1 else -161
     await state.update_data(sex=sex_value)
+
+    # Сохраняем пол в последних данных
+    user_id = message.from_user.id
+    user_last_data[user_id]['sex'] = 'Мужской' if sex_value == 5 else 'Женский'
+
     await message.answer(MESSAGES['enter_height'], parse_mode="HTML")
     await state.set_state(UserState.growth)
 
@@ -194,6 +162,11 @@ async def set_growth(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(growth=growth)
+
+    # Сохраняем рост в последних данных
+    user_id = message.from_user.id
+    user_last_data[user_id]['growth'] = growth
+
     await message.answer(MESSAGES['enter_weight'], parse_mode="HTML")
     await state.set_state(UserState.weight)
 
@@ -210,6 +183,11 @@ async def set_weight(message: types.Message, state: FSMContext):
         return
 
     await state.update_data(weight=weight)
+
+    # Сохраняем вес в последних данных
+    user_id = message.from_user.id
+    user_last_data[user_id]['weight'] = weight
+
     await message.answer(MESSAGES['choose_activity'], reply_markup=activity_keyboard, parse_mode="HTML")
     await state.set_state(UserState.activity)
 
@@ -289,7 +267,7 @@ async def exercise(message: types.Message, state: FSMContext):
 @dp.message(StateFilter(RegistrationExercise.name_exercise))
 async def set_exer(message: types.Message, state: FSMContext):
     name_exercise = message.text
-    bool_name = is_included(name_exercise)
+    bool_name = exercise_exists(name_exercise)  # Исправлено: используем функцию для проверки упражнений
     if bool_name:
         await message.reply(
             'Такое упражнение уже существует, хотите обновить показатели? тогда используйте "Обновление данных".')
@@ -334,6 +312,101 @@ async def set_iteration(message: types.Message, state: FSMContext):
     await message.reply(
         "Ну после такого подхода вас трудно не похвалить, так держать наша цель здоровье и красивое тело😉")
     await state.clear()
+
+
+@dp.message(Command(commands=['profile']))
+async def show_profile(message: types.Message):
+    # Здесь нужно получить данные пользователя из БД
+    # Предположим, что у вас есть функция get_user_data
+    user_data = get_user_data(message.from_user.id)  # Реализуйте эту функцию в crud_functions
+
+    if user_data:
+        profile_text = f"""👤 <b>Ваш профиль:</b>
+
+🆔 ID: {message.from_user.id}
+📝 Имя: {user_data['username']}
+📧 Email: {user_data['email']}
+🎂 Возраст: {user_data['age']} лет
+
+/stats - Статистика тренировок"""
+
+        await message.answer(profile_text, reply_markup=profile_keyboard, parse_mode="HTML")
+    else:
+        await message.answer("❌ Профиль не найден. Пройдите регистрацию.")
+
+
+# Обработчик редактирования профиля
+@dp.callback_query(F.data.startswith("edit_"))
+async def edit_profile_callback(call: types.CallbackQuery, state: FSMContext):
+    action = call.data.split("_")[1]
+
+    if action == "username":
+        await call.message.answer("Введите новое имя пользователя:")
+        await state.set_state(RegistrationState.username)
+    elif action == "email":
+        await call.message.answer("Введите новый email:")
+        await state.set_state(RegistrationState.email)
+    elif action == "age":
+        await call.message.answer("Введите новый возраст:")
+        await state.set_state(RegistrationState.age)
+
+    await call.answer()
+
+
+def is_russian_profanity(text: str) -> bool:
+    text_lower = text.lower()
+    for word in forbidden_words:
+        if word in text_lower:
+            return True
+    return False
+
+
+def is_valid_username(username: str) -> tuple[bool, str]:
+    # Проверка длины
+    if len(username) < 2 or len(username) > 30:
+        return False, "Имя должно быть от 2 до 30 символов."
+
+    # Проверка первого символа (не цифра)
+    if username[0].isdigit():
+        return False, "Имя не может начинаться с цифры."
+
+    # Проверка на допустимые символы
+    if not re.match(r'^[a-zA-Zа-яА-ЯёЁ0-9_-]+$', username):
+        return False, "Имя содержит недопустимые символы."
+
+    # Проверка на мат через better-profanity (английский)
+    if profanity.contains_profanity(username):
+        return False, "Имя содержит запрещённые слова."
+
+    # Проверка на русский мат через кастомный список
+    if is_russian_profanity(username):
+        return False, "Имя содержит запрещённые слова."
+
+    return True, ""
+
+
+def is_valid_email(email: str) -> tuple[bool, str]:
+    """
+    Проверяет корректность email:
+    - Соответствие формату email
+    - Не содержит запрещенных слов
+    """
+    # Проверка формата email с помощью регулярного выражения
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return False, "Некорректный формат email. Пример: user@example.com"
+
+    # Проверка на запрещенные слова в email
+    email_lower = email.lower()
+    for forbidden_word in forbidden_words:
+        if forbidden_word in email_lower:
+            return False, "Email содержит запрещённые слова."
+
+    # Проверка на мат через better-profanity (английский)
+    if profanity.contains_profanity(email):
+        return False, "Email содержит запрещённые слова."
+
+    return True, ""
 
 
 @dp.message(F.text == 'Информация')
