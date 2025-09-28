@@ -1,4 +1,3 @@
-#bot.py
 from aiogram import Bot, Dispatcher, types
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.context import FSMContext
@@ -25,17 +24,22 @@ dp = Dispatcher(storage=MemoryStorage())
 
 user_last_data = {}
 
-
 @dp.message(Command(commands=['start']))
 async def start_commands(message: types.Message):
-    await message.answer(MESSAGES["start"], reply_markup=kb, parse_mode="HTML")
+    if user_exists(message.from_user.id):
+        await message.answer(MESSAGES["start"], reply_markup=kb_registered, parse_mode="HTML")
+    else:
+        await message.answer(MESSAGES["start"], reply_markup=kb, parse_mode="HTML")
 
 
 @dp.message(F.text == '👤 Регистрация')
 async def sing_up(message: types.Message, state: FSMContext):
+    if user_exists(message.from_user.id):
+        await message.answer("❌ Вы уже зарегистрированы!")
+        return
+
     await message.answer(MESSAGES["registration_start"], parse_mode="HTML")
     await state.set_state(RegistrationState.username)
-
 
 @dp.message(StateFilter(RegistrationState.username))
 async def set_username(message: types.Message, state: FSMContext):
@@ -85,6 +89,7 @@ async def set_age(message: types.Message, state: FSMContext):
     telegram_id = message.from_user.id
     add_user(username, email, age, telegram_id)
     await message.reply(MESSAGES["registration_success"], parse_mode="HTML")
+    await message.answer(MESSAGES["start"], reply_markup=kb_registered, parse_mode="HTML")
     await state.clear()
 
 
@@ -119,7 +124,6 @@ async def set_age_for_calories(message: types.Message, state: FSMContext):
 
     await state.update_data(age=age)
 
-    # Сохраняем возраст в последних данных пользователя
     user_id = message.from_user.id
     if user_id not in user_last_data:
         user_last_data[user_id] = {}
@@ -143,7 +147,6 @@ async def set_sex(message: types.Message, state: FSMContext):
     sex_value = 5 if sex_input == 1 else -161
     await state.update_data(sex=sex_value)
 
-    # Сохраняем пол в последних данных
     user_id = message.from_user.id
     user_last_data[user_id]['sex'] = 'Мужской' if sex_value == 5 else 'Женский'
 
@@ -164,7 +167,6 @@ async def set_growth(message: types.Message, state: FSMContext):
 
     await state.update_data(growth=growth)
 
-    # Сохраняем рост в последних данных
     user_id = message.from_user.id
     user_last_data[user_id]['growth'] = growth
 
@@ -185,7 +187,6 @@ async def set_weight(message: types.Message, state: FSMContext):
 
     await state.update_data(weight=weight)
 
-    # Сохраняем вес в последних данных
     user_id = message.from_user.id
     user_last_data[user_id]['weight'] = weight
 
@@ -199,7 +200,6 @@ async def set_activity(call: types.CallbackQuery, state: FSMContext):
     await state.update_data(activity=activity_coefficient)
     await call.answer()
 
-    # Получаем все данные и производим расчет
     data = await state.get_data()
     age = data.get('age')
     sex = data.get('sex')
@@ -315,11 +315,10 @@ async def set_iteration(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-@dp.message(Command(commands=['profile']))
+
+@dp.message(F.text == '👤 Мой профиль')
 async def show_profile(message: types.Message):
-    # Здесь нужно получить данные пользователя из БД
-    # Предположим, что у вас есть функция get_user_data
-    user_data = get_user_data(message.from_user.id)  # Реализуйте эту функцию в crud_functions
+    user_data = get_user_data(message.from_user.id)
 
     if user_data:
         profile_text = f"""👤 <b>Ваш профиль:</b>
@@ -336,7 +335,6 @@ async def show_profile(message: types.Message):
         await message.answer("❌ Профиль не найден. Пройдите регистрацию.")
 
 
-# Обработчик редактирования профиля
 @dp.callback_query(F.data.startswith("edit_"))
 async def edit_profile_callback(call: types.CallbackQuery, state: FSMContext):
     action = call.data.split("_")[1]
@@ -350,9 +348,73 @@ async def edit_profile_callback(call: types.CallbackQuery, state: FSMContext):
     elif action == "age":
         await call.message.answer("Введите новый возраст:")
         await state.set_state(RegistrationState.age)
+    elif action == "main_menu":
+        await call.message.answer("Возвращаемся в главное меню", reply_markup=kb)
 
     await call.answer()
 
+
+@dp.message(StateFilter(RegistrationState.username))
+async def update_username(message: types.Message, state: FSMContext):
+    username = message.text
+    is_valid, error_msg = is_valid_username(username)
+    if not is_valid:
+        await message.reply(error_msg, parse_mode="HTML")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE Users SET username = ? WHERE telegram_id = ?",
+                       (username, message.from_user.id))
+        conn.commit()
+        await message.reply(f"✅ Имя успешно изменено на: {username}")
+    finally:
+        conn.close()
+    await state.clear()
+
+
+@dp.message(StateFilter(RegistrationState.email))
+async def update_email(message: types.Message, state: FSMContext):
+    email = message.text
+    is_valid, error_msg = is_valid_email(email)
+    if not is_valid:
+        await message.reply(error_msg, parse_mode="HTML")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE Users SET email = ? WHERE telegram_id = ?",
+                       (email, message.from_user.id))
+        conn.commit()
+        await message.reply(f"✅ Email успешно изменен на: {email}")
+    finally:
+        conn.close()
+    await state.clear()
+
+
+@dp.message(StateFilter(RegistrationState.age))
+async def update_age(message: types.Message, state: FSMContext):
+    try:
+        age = int(message.text)
+        if age < 0 or age > 150:
+            await message.reply(MESSAGES["age_fail"], parse_mode="HTML")
+            return
+    except ValueError:
+        await message.reply(MESSAGES["invalid_number"], parse_mode="HTML")
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE Users SET age = ? WHERE telegram_id = ?",
+                       (age, message.from_user.id))
+        conn.commit()
+        await message.reply(f"✅ Возраст успешно изменен на: {age}")
+    finally:
+        conn.close()
+    await state.clear()
 
 def is_russian_profanity(text: str) -> bool:
     text_lower = text.lower()
