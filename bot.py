@@ -82,7 +82,8 @@ async def set_age(message: types.Message, state: FSMContext):
     data = await state.get_data()
     username = data.get('username')
     email = data.get('email')
-    add_user(username, email, age)
+    telegram_id = message.from_user.id
+    add_user(username, email, age, telegram_id)
     await message.reply(MESSAGES["registration_success"], parse_mode="HTML")
     await state.clear()
 
