@@ -9,7 +9,6 @@ def init_db():
     conn = get_db_connection()
     cursor = conn.cursor()
 
-    # Создание таблиц 
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Exercise(
         id INTEGER PRIMARY KEY,
@@ -20,7 +19,7 @@ def init_db():
     )
     ''')
 
-    # Создание таблицы Users с telegram_id
+
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Users (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,6 +90,14 @@ def add_exercise(name_exercise, working_weight, iteration, user_id=None):
     conn.commit()
     conn.close()
 
+def user_exists(telegram_id):
+    """Проверить, зарегистрирован ли пользователь"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT 1 FROM Users WHERE telegram_id = ?", (telegram_id,))
+    exists = cursor.fetchone() is not None
+    conn.close()
+    return exists
 
 def get_user_data(telegram_id):
     """Получить данные пользователя по Telegram ID"""
