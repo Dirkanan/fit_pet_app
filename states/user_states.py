@@ -16,3 +16,4 @@ class RegistrationExercise(StatesGroup):
     name_exercise = State()
     working_weight = State()
     iteration = State()
+    confirm_update = State()
