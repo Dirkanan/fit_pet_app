@@ -14,7 +14,12 @@ from utils.messages import MESSAGES
 from utils.bad_words import forbidden_words
 from better_profanity import profanity
 import re
-
+import matplotlib
+matplotlib.use('Agg')  # Используем бэкенд без GUI
+import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
+from datetime import datetime
+import io
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не установлен. Проверьте файл .env")
@@ -24,8 +29,10 @@ dp = Dispatcher(storage=MemoryStorage())
 
 user_last_data = {}
 
+
 @dp.message(Command(commands=['start']))
 async def start_commands(message: types.Message):
+    # ИЗМЕНЕНО: Проверяем регистрацию и показываем соответствующее меню
     if user_exists(message.from_user.id):
         await message.answer(MESSAGES["start"], reply_markup=kb_registered, parse_mode="HTML")
     else:
@@ -40,6 +47,7 @@ async def sing_up(message: types.Message, state: FSMContext):
 
     await message.answer(MESSAGES["registration_start"], parse_mode="HTML")
     await state.set_state(RegistrationState.username)
+
 
 @dp.message(StateFilter(RegistrationState.username))
 async def set_username(message: types.Message, state: FSMContext):
@@ -124,6 +132,7 @@ async def set_age_for_calories(message: types.Message, state: FSMContext):
 
     await state.update_data(age=age)
 
+    # Сохраняем возраст в последних данных пользователя
     user_id = message.from_user.id
     if user_id not in user_last_data:
         user_last_data[user_id] = {}
@@ -147,6 +156,7 @@ async def set_sex(message: types.Message, state: FSMContext):
     sex_value = 5 if sex_input == 1 else -161
     await state.update_data(sex=sex_value)
 
+    # Сохраняем пол в последних данных
     user_id = message.from_user.id
     user_last_data[user_id]['sex'] = 'Мужской' if sex_value == 5 else 'Женский'
 
@@ -167,6 +177,7 @@ async def set_growth(message: types.Message, state: FSMContext):
 
     await state.update_data(growth=growth)
 
+    # Сохраняем рост в последних данных
     user_id = message.from_user.id
     user_last_data[user_id]['growth'] = growth
 
@@ -187,6 +198,7 @@ async def set_weight(message: types.Message, state: FSMContext):
 
     await state.update_data(weight=weight)
 
+    # Сохраняем вес в последних данных
     user_id = message.from_user.id
     user_last_data[user_id]['weight'] = weight
 
@@ -200,6 +212,7 @@ async def set_activity(call: types.CallbackQuery, state: FSMContext):
     await state.update_data(activity=activity_coefficient)
     await call.answer()
 
+    # Получаем все данные и производим расчет
     data = await state.get_data()
     age = data.get('age')
     sex = data.get('sex')
@@ -258,9 +271,10 @@ async def handle_nolik(call: types.CallbackQuery):
     await call.message.answer("Вы выбрали поддержание веса. Рекомендуем придерживаться рассчитанной нормы калорий.")
     await call.answer()
 
-
-@dp.message(F.text == 'Записать результат подхода')
+@dp.message(F.text == '💪 Подход')
 async def exercise(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    await state.update_data(telegram_id=user_id)  # Сохраняем telegram_id пользователя
     await message.answer("Введите название упражнения")
     await state.set_state(RegistrationExercise.name_exercise)
 
@@ -268,14 +282,36 @@ async def exercise(message: types.Message, state: FSMContext):
 @dp.message(StateFilter(RegistrationExercise.name_exercise))
 async def set_exer(message: types.Message, state: FSMContext):
     name_exercise = message.text
-    bool_name = exercise_exists(name_exercise)  # Исправлено: используем функцию для проверки упражнений
-    if bool_name:
+    data = await state.get_data()
+    user_id = data.get('telegram_id')  # Получаем telegram_id пользователя
+
+    # ИЗМЕНЕНО: Теперь проверяем существование упражнения у конкретного пользователя
+    if exercise_exists(name_exercise, user_id):
         await message.reply(
-            'Такое упражнение уже существует, хотите обновить показатели? тогда используйте "Обновление данных".')
+            'Такое упражнение уже существует у вас. Хотите обновить результаты? (да/нет)')
+        await state.update_data(name_exercise=name_exercise)  # Сохраняем имя для дальнейшего использования
+        await state.set_state(RegistrationExercise.confirm_update)
     else:
         await state.update_data(name_exercise=name_exercise)
         await state.set_state(RegistrationExercise.working_weight)
         await message.reply("Укажите ваш рабочий вес:")
+
+@dp.message(StateFilter(RegistrationExercise.confirm_update))
+async def confirm_update(message: types.Message, state: FSMContext):
+    response = message.text.lower()
+    data = await state.get_data()
+    name_exercise = data.get('name_exercise')
+    user_id = data.get('telegram_id')
+
+    if response in ['да', 'yes', 'обновить']:
+        # Продолжаем с обновлением
+        await message.reply("Укажите новый рабочий вес:")
+        await state.set_state(RegistrationExercise.working_weight)
+    elif response in ['нет', 'no', 'новое']:
+        await message.reply("Введите другое название упражнения:")
+        await state.set_state(RegistrationExercise.name_exercise)
+    else:
+        await message.reply("Пожалуйста, ответьте 'да' или 'нет':")
 
 
 @dp.message(StateFilter(RegistrationExercise.working_weight))
@@ -308,19 +344,28 @@ async def set_iteration(message: types.Message, state: FSMContext):
     data = await state.get_data()
     name_exercise = data.get('name_exercise')
     working_weight = data.get('working_weight')
-    add_exercise(name_exercise, working_weight, iteration)
+    user_id = data.get('telegram_id')  # Получаем telegram_id для привязки
 
-    await message.reply(
-        "Ну после такого подхода вас трудно не похвалить, так держать наша цель здоровье и красивое тело😉")
+    if exercise_exists(name_exercise, user_id):
+        update_exercise(name_exercise, working_weight, iteration, user_id)
+        await message.reply(
+            f"✅ Результаты упражнения '{name_exercise}' обновлены!\n"
+            f"🏋️ Вес: {working_weight} кг | 🔄 Повторений: {iteration}")
+    else:
+        add_exercise(name_exercise, working_weight, iteration, user_id)  # Передаем telegram_id
+        await message.reply(
+            f"✅ Новый подход записан!\n"
+            f"💪 Упражнение: {name_exercise}\n"
+            f"🏋️ Вес: {working_weight} кг | 🔄 Повторений: {iteration}")
+
     await state.clear()
-
 
 
 @dp.message(F.text == '👤 Мой профиль')
 async def show_profile(message: types.Message):
     user_data = get_user_data(message.from_user.id)
 
-    if user_data:
+    if user_data:  # ИСПРАВЛЕНО: добавлено двоеточие
         profile_text = f"""👤 <b>Ваш профиль:</b>
 
 🆔 ID: {message.from_user.id}
@@ -415,6 +460,95 @@ async def update_age(message: types.Message, state: FSMContext):
     finally:
         conn.close()
     await state.clear()
+
+@dp.message(Command(commands=['progress']))
+async def show_progress_options(message: types.Message):
+    """Показать варианты просмотра прогресса"""
+    exercises = get_all_user_exercises(message.from_user.id)
+
+    if not exercises:
+        await message.answer("❌ У вас пока нет записанных упражнений.")
+        return
+
+    # Создаем клавиатуру с упражнениями
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[])
+    for exercise in exercises:
+        keyboard.inline_keyboard.append([
+            InlineKeyboardButton(text=exercise, callback_data=f"progress_{exercise}")
+        ])
+
+    await message.answer("📊 <b>Выберите упражнение для просмотра прогресса:</b>",
+                         reply_markup=keyboard, parse_mode="HTML")
+
+
+@dp.callback_query(F.data.startswith("progress_"))
+async def show_exercise_progress(call: types.CallbackQuery):
+    """Показать прогресс по выбранному упражнению"""
+    exercise_name = call.data.split("_", 1)[1]
+    user_id = call.from_user.id
+
+    # Генерируем график
+    chart_buffer = generate_progress_chart(exercise_name, user_id)
+
+    if chart_buffer:
+        # Отправляем график
+        chart_buffer.name = f"progress_{exercise_name}.png"
+        photo = types.input_file.BufferedInputFile(chart_buffer.read(), filename=f"progress_{exercise_name}.png")
+        await call.message.answer_photo(photo=photo, caption=f"📈 Прогресс по упражнению: <b>{exercise_name}</b>",
+                                        parse_mode="HTML")
+
+        # Также отправляем текстовую статистику
+        progress_data = get_exercise_progress(exercise_name, user_id)
+        if progress_data:
+            first_weight = progress_data[0][0]
+            last_weight = progress_data[-1][0]
+            improvement = last_weight - first_weight
+
+            stats_text = f"""📊 <b>Статистика прогресса по {exercise_name}:</b>
+
+📈 Начальный вес: {first_weight} кг
+🎯 Текущий вес: {last_weight} кг
+✅ Прогресс: {improvement:+.1f} кг
+
+"""
+            if improvement > 0:
+                stats_text += "🎉 Отличный прогресс! Вы прибавили в силе!"
+            elif improvement == 0:
+                stats_text += "💪 Вы держите стабильный вес, продолжайте в том же духе!"
+            else:
+                stats_text += "💪 Не расстраивайтесь! Прогресс требует времени."
+
+            await call.message.answer(stats_text, parse_mode="HTML")
+    else:
+        await call.message.answer(f"❌ Недостаточно данных для построения графика по упражнению: {exercise_name}")
+
+    await call.answer()
+
+
+@dp.message(Command(commands=['all_progress']))
+async def show_all_progress(message: types.Message):
+    """Показать общий прогресс по всем упражнениям"""
+    exercises = get_all_user_exercises(message.from_user.id)
+
+    if not exercises:
+        await message.answer("❌ У вас пока нет записанных упражнений.")
+        return
+
+    progress_text = "📊 <b>Общий прогресс по всем упражнениям:</b>\n\n"
+
+    for exercise in exercises:
+        progress_data = get_exercise_progress(exercise, message.from_user.id, limit=10)
+        if progress_data:
+            first_weight = progress_data[0][0]
+            last_weight = progress_data[-1][0]
+            improvement = last_weight - first_weight
+
+            progress_text += f"<b>{exercise}:</b>\n"
+            progress_text += f"   📈 От {first_weight} кг до {last_weight} кг\n"
+            progress_text += f"   ✅ Прогресс: {improvement:+.1f} кг\n\n"
+
+    await message.answer(progress_text, parse_mode="HTML")
+
 
 def is_russian_profanity(text: str) -> bool:
     text_lower = text.lower()
