@@ -1,0 +1,134 @@
+[project]
+name = "fit-pet"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Dirkanan",email = "Dirkanan@yandex.ru"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "aiogram (>=3.22.0,<4.0.0)",
+    "python-dotenv (>=1.1.1,<2.0.0)",
+    "better-profanity (>=0.7.0,<0.8.0)",
+    "matplotlib (>=3.10.7,<4.0.0)",
+    "sqlalchemy (>=2.0.44,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[dependency-groups]
+dev = [
+    "ruff (>=0.14.0,<0.15.0)",
+    "mypy (>=1.18.2,<2.0.0)",
+    "pytest (>=8.4.2,<9.0.0)",
+    "pytest-asyncio (>=1.2.0,<2.0.0)"
+]
+[tool.ruff]
+
+extend-include = ["*.pyi"]
+line-length = 1200
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "W",
+    "F",
+    "I",
+    "UP",
+    "SIM",
+    "PGH",
+    "RUF",
+    "B",
+    "C4",
+    "DTZ",
+    "ICN",
+    "ISC",
+    "PIE",
+    "PL",
+    "PT",
+    "PYI",
+    "RUF",
+    "S",
+    "SIM",
+    "UP",
+    "YTT",
+    "ANN",
+    "BLE",
+    "B",
+    "C9",
+    "DTZ",
+    "EXE",
+    "PGH",
+    "PIE",
+    "PL",
+    "PT",
+    "PYI",
+    "RUF",
+    "S",
+    "SIM",
+    "UP",
+    "YTT",
+    "A",
+    "C4",
+    "DTZ",
+    "EM",
+    "EXE",
+    "ISC",
+    "PGH",
+    "PIE",
+    "PL",
+    "PT",
+    "PYI",
+    "RUF",
+    "S",
+    "SIM",
+    "UP",
+    "YTT",
+]
+
+
+ignore = [
+#     "PLR",
+#     "PLC0415",
+    "S101",
+]
+
+# Автоматические исправления (где возможно)
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.per-file-ignores]
+"utils/messages.py" = ["RUF001", "RUF003"]
+"utils/bad_words.py" = ["RUF001", "RUF003"]
+"bot.py" = ["RUF001", "RUF003", "ANN", "F405"]
+"tests/*.py" = ["S101", "RUF001", "RUF003", "ANN"]
+"fit_pet/*.py" = ["RUF001", "RUF003"]
+"crud_functions.py" = ["ANN"]
+"keyboards/reply_keyboards.py" = ["RUF001"]
+
+[tool.ruff.format]
+# Использовать переносы строк как в Black
+quote-style = "single" # Использовать одинарные кавычки
+indent-style = "space" # Использовать пробелы
+line-ending = "auto" # Автоопределение окончания строк
+skip-magic-trailing-comma = false # Не игнорировать висячую запятую
+[tool.mypy]
+python_version = "3.12" # Версия Python
+# warn_return_any = true # Вызывает много предупреждений, включай позже
+# warn_unused_configs = true # Вызывает много предупреждений, включай позже
+# warn_unused_ignores = true # Вызывает много предупреждений, включай позже
+disallow_untyped_defs = true # Требовать аннотации типов для всех функций (включаем!)
+disallow_incomplete_defs = true # Все аргументы должны быть аннотированы, если хотя бы один аннотирован
+check_untyped_defs = true # Проверять тело функций без аннотаций
+disallow_untyped_decorators = true # Проверять аннотации декораторов
+ignore_missing_imports = true # Игнорировать импорты библиотек, у которых нет stub-файлов (например, aiogram, matplotlib)
+# strict_optional = true # Включай позже, когда код будет готов
+# warn_redundant_casts = true # Включай позже
+# warn_unused_ignores = true # Включай позже
+# show_error_codes = true # Показывать коды ошибок
+# enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]

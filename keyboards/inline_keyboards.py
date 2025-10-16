@@ -1,4 +1,4 @@
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 kb_line = InlineKeyboardMarkup(
     inline_keyboard=[
@@ -22,5 +22,14 @@ activity_keyboard = InlineKeyboardMarkup(
         [InlineKeyboardButton(text='🚴 Умеренная (1.55)', callback_data='1.55')],
         [InlineKeyboardButton(text='🏃 Активная (1.725)', callback_data='1.725')],
         [InlineKeyboardButton(text='🏋️ Очень активная (1.9)', callback_data='1.9')]
+    ]
+)
+
+profile_keyboard = InlineKeyboardMarkup(
+    inline_keyboard=[
+        [InlineKeyboardButton(text="✏️ Редактировать имя", callback_data="edit_username")],
+        [InlineKeyboardButton(text="📧 Редактировать email", callback_data="edit_email")],
+        [InlineKeyboardButton(text="🎂 Редактировать возраст", callback_data="edit_age")],
+        [InlineKeyboardButton(text="🏠 B главное меню", callback_data="main_menu")]
     ]
 )

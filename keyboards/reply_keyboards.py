@@ -1,9 +1,19 @@
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import KeyboardButton, ReplyKeyboardMarkup
 
 kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text='🧮 Калорийность'), KeyboardButton(text='ℹ️ Информация')],
-        [KeyboardButton(text='👤 Регистрация'), KeyboardButton(text='💪 Подход')]
+        [KeyboardButton(text='👤 Регистрация'), KeyboardButton(text='💪 Подход')],
+        [KeyboardButton(text='⚙️ Редактировать профиль')]
+    ],
+    resize_keyboard=True
+)
+
+kb_registered = ReplyKeyboardMarkup(
+    keyboard=[
+        [KeyboardButton(text='🧮 Калорийность'), KeyboardButton(text='ℹ️ Информация')],
+        [KeyboardButton(text='💪 Подход'), KeyboardButton(text='👤 Мой профиль')],
+        [KeyboardButton(text='⚙️ Редактировать профиль')]
     ],
     resize_keyboard=True
 )
