@@ -269,7 +269,6 @@ async def handle_nolik(call: types.CallbackQuery):
     await call.answer()
 
 
-# ИЗМЕНЕНО: Обновленная функция записи подходов с привязкой к telegram_id
 @dp.message(F.text == '💪 Подход')
 async def exercise(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
@@ -284,7 +283,6 @@ async def set_exer(message: types.Message, state: FSMContext):
     data = await state.get_data()
     user_id = data.get('telegram_id')  # Получаем telegram_id пользователя
 
-    # ИЗМЕНЕНО: Теперь проверяем существование упражнения у конкретного пользователя
     if exercise_exists(name_exercise, user_id):
         await message.reply(
             'Такое упражнение уже существует у вас. Хотите обновить результаты? (да/нет)')
@@ -296,7 +294,6 @@ async def set_exer(message: types.Message, state: FSMContext):
         await message.reply("Укажите ваш рабочий вес:")
 
 
-# ИЗМЕНЕНО: Новый обработчик для подтверждения обновления
 @dp.message(StateFilter(RegistrationExercise.confirm_update))
 async def confirm_update(message: types.Message, state: FSMContext):
     response = message.text.lower()
@@ -347,7 +344,6 @@ async def set_iteration(message: types.Message, state: FSMContext):
     working_weight = data.get('working_weight')
     user_id = data.get('telegram_id')  # Получаем telegram_id для привязки
 
-    # ИЗМЕНЕНО: Проверяем существование упражнения у конкретного пользователя и решаем: добавить или обновить
     if exercise_exists(name_exercise, user_id):
         update_exercise(name_exercise, working_weight, iteration, user_id)
         await message.reply(
@@ -367,7 +363,7 @@ async def set_iteration(message: types.Message, state: FSMContext):
 async def show_profile(message: types.Message):
     user_data = get_user_data(message.from_user.id)
 
-    if user_data:  # ИСПРАВЛЕНО: добавлено двоеточие
+    if user_data:
         profile_text = f"""👤 <b>Ваш профиль:</b>
 
 🆔 ID: {message.from_user.id}
@@ -464,7 +460,6 @@ async def update_age(message: types.Message, state: FSMContext):
     await state.clear()
 
 
-# ИЗМЕНЕНО: Новые обработчики для отслеживания прогресса
 @dp.message(Command(commands=['progress']))
 async def show_progress_options(message: types.Message):
     """Показать варианты просмотра прогресса"""
